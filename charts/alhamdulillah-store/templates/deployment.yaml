@@ -1,0 +1,48 @@
+{{- range $name, $service := .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+spec:
+  replicas: {{ $service.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0 # Zero Downtime Deployments
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: "{{ $service.image }}:{{ $service.tag }}"
+          imagePullPolicy: IfNotPresent
+          {{- if $service.command }}
+          command:
+{{ toYaml $service.command | indent 12 }}
+          {{- end }}
+          {{- if not $service.isWorker }}
+          ports:
+            - containerPort: {{ $service.port }}
+          # AppSumo Zero-Downtime Healthchecks
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          {{- end }}
+          resources:
+{{ toYaml $service.resources | indent 12 }}
+          envFrom:
+            - secretRef:
+                name: alhamdulillah-secrets
+---
+{{- end }}
