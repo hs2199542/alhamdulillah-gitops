@@ -1,0 +1,78 @@
+# infrastructure-gitops/charts/alhamdulillah-store/values.yaml
+
+global:
+  domain: alhamdulillah.store
+  ingressClass: traefik
+
+# Database Connection (In production, use SealedSecrets or AWS Parameter Store)
+secretEnv:
+  DATABASE_URL: "postgresql://postgres:postgres@managed-db.host:5432/payment_db"
+  REDIS_HOST: "managed-redis.host"
+
+services:
+  api-backend:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/alhamdulillah-api-backend
+    tag: "main" # CI WILL UPDATE THIS AUTOMATICALLY
+    port: 8000
+    isWorker: false
+    host: "api.alhamdulillah.store"
+    path: "/"
+    replicas: 3
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 15 # AppSumo Spike Protection
+      targetCPUUtilizationPercentage: 75
+
+  auth-service:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/alhamdulillah-auth-service
+    tag: "main" # CI WILL UPDATE THIS AUTOMATICALLY
+    port: 8003
+    isWorker: false
+    host: "api.alhamdulillah.store"
+    path: "/auth"
+    replicas: 3
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "300m", memory: "256Mi" }
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 75
+
+  store-frontend:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/alhamdulillah-store-frontend
+    tag: "main" # CI WILL UPDATE THIS AUTOMATICALLY
+    port: 80
+    isWorker: false
+    host: "store.alhamdulillah.store"
+    path: "/"
+    replicas: 2
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "200m", memory: "128Mi" }
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 75
+
+  # Workers don't get Services or Ingresses, just auto-scaling Deployments
+  celery-worker:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/alhamdulillah-api-backend
+    tag: "main" # CI WILL UPDATE THIS AUTOMATICALLY
+    command: ["celery", "-A", "celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    isWorker: true
+    replicas: 2
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 20
+      targetCPUUtilizationPercentage: 80
